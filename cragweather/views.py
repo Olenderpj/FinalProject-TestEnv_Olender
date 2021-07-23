@@ -2,8 +2,10 @@ from django.shortcuts import render
 from django.http import HttpResponse
 import logging, coloredlogs, requests, re, geonamescache
 import time, schedule
+from threading import Thread
 from bs4 import BeautifulSoup
 from .models import weatherModel, locationModel, cragModel
+
 
 DATA_FOR_SCRAPING_URL='https://www.mountainproject.com/'
 
@@ -62,6 +64,7 @@ def adjustName(name):
     correctedName = re.sub(",", "", correctedNameWithComma)
     return correctedName
 
+# Dive in to a website and find the GPS Coordinates
 def getCoordinates(areaHttpsLink):
     climbingAreaPageResponse = requests.get(areaHttpsLink).text
     climbingAreaSoup = BeautifulSoup(climbingAreaPageResponse, 'html.parser')
@@ -77,20 +80,19 @@ def getAreaInformation(areaHttpsLink):
     stateResponse = requests.get(areaHttpsLink)
     stateSoup = BeautifulSoup(stateResponse.text, 'html.parser')
     climbingAreas = stateSoup.findAll('div', {'class': 'lef-nav-row'})
-    coordinates = getCoordinates(areaHttpsLink)
-    areaName = ''
-    areaLink = ''
-    
+
+    # Iterate through all climbing areas in the sub area
     for area in climbingAreas:
         areaAttributes = area.find('a')
         areaName = areaAttributes.text
-        areaLink = areaAttributes.get('href')
+        subAreaLink = areaAttributes.get('href')
+        coordinates = getCoordinates(subAreaLink)
 
         if "," in areaName:
             areaName = adjustName(areaName)
-        print(areaName, ":", coordinates, " ", areaLink)
+        print(areaName, ":", coordinates, " ", subAreaLink)
         
-        buildSingleAreaInDatabase(areaName, areaLink, coordinates)  
+        buildSingleAreaInDatabase(areaName, subAreaLink, coordinates)  
 
 
 
@@ -119,8 +121,19 @@ def buildLocationInDatabase(locationName, locationWebLink, locationKey):
     obj, created = locationModel.objects.update_or_create(location_key = locationKey, location_name = locationName, location_web_link = locationWebLink)
 
 def buildAllAreasInDataBase():
+  threads = []
+
   for model in locationModel.objects.all():
-    getAreaInformation(model.location_web_link)
+    threads.append(Thread(target=getAreaInformation, args=[model.location_web_link]))
+    threads[-1].start()
+    #getAreaInformation(model.location_web_link)
+
+  for thread in threads:
+    thread.join()
+
+
+
+
 
 
 
@@ -132,8 +145,8 @@ def updateDatabase():
 
 
 # Initialize the database
-getLocationInformation(DATA_FOR_SCRAPING_URL)
-buildAllAreasInDataBase()
+#getLocationInformation(DATA_FOR_SCRAPING_URL)
+#buildAllAreasInDataBase()
 
 
  

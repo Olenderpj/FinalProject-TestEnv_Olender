@@ -4,5 +4,6 @@ from . import views
 
 urlpatterns = [
   path('', views.addToDatabase, name='addToDataBase'),
-  path('', views.buildLocationInDatabase, name='buildLocationInDatabase')
+  path('', views.buildLocationInDatabase, name='buildLocationInDatabase'),
+  
 ]
